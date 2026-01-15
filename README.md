@@ -18,18 +18,11 @@ This project integrates Wazuh, MISP, Shuffle, and DFIR IRIS via a centralized La
 
 1.  **Clone the repository**:
     ```bash
-    git clone <repo_url>
-    cd antigravity
+    git clone https://github.com/orcasoc/maksoc-ai-proje.git
+    cd maksoc-ai-proje
     ```
 
-2.  **Run the Setup Script**:
-    This script configures system limits (vm.max_map_count) and builds the stack.
-    ```bash
-    chmod +x setup.sh
-    sudo ./setup.sh
-    ```
-
-3.  **Manual Start**:
+2.  **Manual Start**:
     ```bash
     sysctl -w vm.max_map_count=262144
     docker-compose up -d --build
