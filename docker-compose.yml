@@ -4,7 +4,7 @@ services:
   # ==========================================
   # PLATFORM CORE
   # ==========================================
-  
+
   # The Main LangChain MCP Gateway
   gateway:
     build:
@@ -48,7 +48,7 @@ services:
     networks:
       - mcp_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -80,7 +80,7 @@ services:
     container_name: mcp_misp_adapter
     environment:
       - MISP_BASE_URL=https://misp-core
-      - MISP_API_KEY=YOUR_GENERATED_API_KEY # Needs to be updated after MISP init
+      - MISP_API_KEY=YOUR_GENERATED_API_KEY
     networks:
       - mcp_network
     depends_on:
@@ -94,7 +94,7 @@ services:
     container_name: mcp_shuffle_adapter
     environment:
       - SHUFFLE_URL=http://shuffle-backend:${SHUFFLE_BACKEND_PORT}
-      - SHUFFLE_API_TOKEN=YOUR_GENERATED_TOKEN # Needs to be updated after Shuffle init
+      - SHUFFLE_API_TOKEN=YOUR_GENERATED_TOKEN
     networks:
       - mcp_network
     depends_on:
@@ -108,7 +108,7 @@ services:
     container_name: mcp_dfir_iris_adapter
     environment:
       - IRIS_URL=http://iris-web:8000
-      - IRIS_API_TOKEN=YOUR_GENERATED_TOKEN # Needs to be updated after IRIS init
+      - IRIS_API_TOKEN=YOUR_GENERATED_TOKEN
     networks:
       - mcp_network
     depends_on:
@@ -273,7 +273,7 @@ services:
   # ==========================================
   # DFIR IRIS STACK
   # ==========================================
-  
+
   iris-db:
     image: postgres:15-alpine
     container_name: iris-db
@@ -347,13 +347,13 @@ networks:
 
 volumes:
   # Wazuh Volumes
-  wazuh-indexer-data:
-  # Shuffle Volumes
+  wazuh-indexer-data: # Shuffle Volumes
+
   shuffle_db_data:
   shuffle_app_data:
-  shuffle_file_data:
-  # MISP Volumes
-  misp_db_data:
-  # IRIS Volumes
+  shuffle_file_data: # MISP Volumes
+
+  misp_db_data: # IRIS Volumes
+
   iris_db_data:
   iris_upload_data:
