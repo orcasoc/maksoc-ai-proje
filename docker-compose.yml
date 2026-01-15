@@ -1,0 +1,359 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # PLATFORM CORE
+  # ==========================================
+  
+  # The Main LangChain MCP Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: gateway
+    container_name: mcp_gateway
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - REDIS_URL=${REDIS_URL}
+      - WAZUH_MCP_URL=http://wazuh-mcp:3000
+      - MISP_MCP_URL=http://misp-mcp:3000
+      - SHUFFLE_MCP_URL=http://shuffle-mcp:3000
+      - DFIR_IRIS_MCP_URL=http://dfir-iris-mcp:3000
+      - LOG_LEVEL=${LOG_LEVEL}
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "${GATEWAY_PORT}:8080"
+    depends_on:
+      redis_main:
+        condition: service_healthy
+      wazuh-mcp:
+        condition: service_started
+      misp-mcp:
+        condition: service_started
+      shuffle-mcp:
+        condition: service_started
+      dfir-iris-mcp:
+        condition: service_started
+    networks:
+      - mcp_network
+    volumes:
+      - ./logs:/app/logs
+
+  # Main Redis for the Gateway Context Store
+  redis_main:
+    image: redis:alpine
+    container_name: mcp_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - mcp_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ==========================================
+  # MCP ADAPTERS (Microservices)
+  # ==========================================
+
+  wazuh-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: wazuh
+    container_name: mcp_wazuh_adapter
+    environment:
+      - WAZUH_API_URL=https://wazuh.manager:${WAZUH_API_PORT}
+      - WAZUH_API_USER=${WAZUH_API_USERNAME}
+      - WAZUH_API_PASS=${WAZUH_API_PASSWORD}
+    networks:
+      - mcp_network
+    depends_on:
+      - wazuh.manager
+
+  misp-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: misp
+    container_name: mcp_misp_adapter
+    environment:
+      - MISP_BASE_URL=https://misp-core
+      - MISP_API_KEY=YOUR_GENERATED_API_KEY # Needs to be updated after MISP init
+    networks:
+      - mcp_network
+    depends_on:
+      - misp-core
+
+  shuffle-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: shuffle
+    container_name: mcp_shuffle_adapter
+    environment:
+      - SHUFFLE_URL=http://shuffle-backend:${SHUFFLE_BACKEND_PORT}
+      - SHUFFLE_API_TOKEN=YOUR_GENERATED_TOKEN # Needs to be updated after Shuffle init
+    networks:
+      - mcp_network
+    depends_on:
+      - shuffle-backend
+
+  dfir-iris-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dfir-iris
+    container_name: mcp_dfir_iris_adapter
+    environment:
+      - IRIS_URL=http://iris-web:8000
+      - IRIS_API_TOKEN=YOUR_GENERATED_TOKEN # Needs to be updated after IRIS init
+    networks:
+      - mcp_network
+    depends_on:
+      - iris-web
+
+  # ==========================================
+  # WAZUH STACK (Official Configurations)
+  # ==========================================
+
+  wazuh.manager:
+    image: wazuh/wazuh-manager:${WAZUH_VERSION}
+    hostname: wazuh.manager
+    container_name: wazuh.manager
+    restart: always
+    ports:
+      - "${WAZUH_REGISTRATION_PORT}:1515"
+      - "${WAZUH_API_PORT}:55000"
+      - "${WAZUH_SYSLOG_PORT}:514/udp"
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=${WAZUH_INDEXER_USERNAME}
+      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+    networks:
+      - mcp_network
+
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:${WAZUH_VERSION}
+    hostname: wazuh.indexer
+    container_name: wazuh.indexer
+    restart: always
+    ports:
+      - "${WAZUH_INDEXER_PORT}:9200"
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+    networks:
+      - mcp_network
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:${WAZUH_VERSION}
+    hostname: wazuh.dashboard
+    container_name: wazuh.dashboard
+    restart: always
+    ports:
+      - "${WAZUH_DASHBOARD_PORT}:5601"
+    environment:
+      - WAZUH_API_URL=https://wazuh.manager
+      - OPENSEARCH_URL=https://wazuh.indexer:9200
+    networks:
+      - mcp_network
+    depends_on:
+      - wazuh.indexer
+      - wazuh.manager
+
+  # ==========================================
+  # SHUFFLE STACK (Official Configurations)
+  # ==========================================
+
+  shuffle-frontend:
+    image: ${SHUFFLE_FRONTEND_IMAGE}:${SHUFFLE_VERSION}
+    container_name: shuffle-frontend
+    hostname: shuffle-frontend
+    ports:
+      - "${SHUFFLE_FRONTEND_PORT}:443"
+    networks:
+      - mcp_network
+    environment:
+      - BACKEND_HOSTNAME=${BACKEND_HOSTNAME}
+    depends_on:
+      - shuffle-backend
+    restart: unless-stopped
+
+  shuffle-backend:
+    image: ${SHUFFLE_BACKEND_IMAGE}:${SHUFFLE_VERSION}
+    container_name: shuffle-backend
+    hostname: ${BACKEND_HOSTNAME}
+    ports:
+      - "${SHUFFLE_BACKEND_PORT}:5001"
+    networks:
+      - mcp_network
+    environment:
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_FILE_LOCATION=/shuffle-files
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - shuffle_app_data:/shuffle-apps
+      - shuffle_file_data:/shuffle-files
+    restart: unless-stopped
+
+  shuffle-opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    hostname: shuffle-opensearch
+    container_name: shuffle-opensearch
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1024m -Xmx1024m"
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD}
+    ports:
+      - "${SHUFFLE_OPENSEARCH_PORT}:9200"
+    networks:
+      - mcp_network
+    volumes:
+      - shuffle_db_data:/usr/share/opensearch/data
+    restart: unless-stopped
+
+  shuffle-orborus:
+    image: ${SHUFFLE_ORBORUS_IMAGE}:${SHUFFLE_VERSION}
+    container_name: shuffle-orborus
+    hostname: shuffle-orborus
+    networks:
+      - mcp_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - BASE_URL=http://${BACKEND_HOSTNAME}:5001
+      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:${SHUFFLE_VERSION}
+    restart: unless-stopped
+
+  # ==========================================
+  # MISP STACK (Official Configurations)
+  # ==========================================
+
+  misp-core:
+    image: ghcr.io/misp/misp-docker/misp-core:${MISP_CORE_TAG}
+    container_name: misp-core
+    restart: always
+    ports:
+      - "${MISP_HTTP_PORT}:80"
+      - "${MISP_HTTPS_PORT}:443"
+    environment:
+      - BASE_URL=${MISP_BASE_URL}
+      - REDIS_HOST=misp-redis
+      - MYSQL_HOST=misp-db
+    networks:
+      - mcp_network
+    depends_on:
+      - misp-db
+      - misp-redis
+
+  misp-db:
+    image: mariadb:10.11
+    container_name: misp-db
+    restart: always
+    environment:
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    networks:
+      - mcp_network
+    volumes:
+      - misp_db_data:/var/lib/mysql
+
+  misp-redis:
+    image: valkey/valkey:7.2
+    container_name: misp-redis
+    restart: always
+    command: valkey-server --requirepass ${MISP_REDIS_PASSWORD}
+    networks:
+      - mcp_network
+
+  # ==========================================
+  # DFIR IRIS STACK
+  # ==========================================
+  
+  iris-db:
+    image: postgres:15-alpine
+    container_name: iris-db
+    environment:
+      - POSTGRES_USER=${IRIS_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+    networks:
+      - mcp_network
+    volumes:
+      - iris_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  iris-web:
+    image: dfiriris/iris-web:${IRIS_VERSION}
+    container_name: iris-web
+    depends_on:
+      - iris-db
+      - iris-rabbitmq
+    environment:
+      - POSTGRES_SERVER=iris-db
+      - POSTGRES_USER=${IRIS_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+      - RABBITMQ_SERVER=iris-rabbitmq
+      - RABBITMQ_USER=${IRIS_RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD}
+    ports:
+      - "${IRIS_WEB_PORT}:8000"
+    networks:
+      - mcp_network
+    volumes:
+      - iris_upload_data:/app/uploads
+    restart: unless-stopped
+
+  iris-worker:
+    image: dfiriris/iris-worker:${IRIS_VERSION}
+    container_name: iris-worker
+    depends_on:
+      - iris-web
+    environment:
+      - POSTGRES_SERVER=iris-db
+      - POSTGRES_USER=${IRIS_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+      - RABBITMQ_SERVER=iris-rabbitmq
+      - RABBITMQ_USER=${IRIS_RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD}
+    networks:
+      - mcp_network
+    volumes:
+      - iris_upload_data:/app/uploads
+    restart: unless-stopped
+
+  iris-rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: iris-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${IRIS_RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${IRIS_RABBITMQ_PASSWORD}
+    networks:
+      - mcp_network
+    ports:
+      - "${IRIS_RABBITMQ_PORT}:5672"
+      - "${IRIS_RABBITMQ_MGMT_PORT}:15672"
+    restart: unless-stopped
+
+networks:
+  mcp_network:
+    driver: bridge
+
+volumes:
+  # Wazuh Volumes
+  wazuh-indexer-data:
+  # Shuffle Volumes
+  shuffle_db_data:
+  shuffle_app_data:
+  shuffle_file_data:
+  # MISP Volumes
+  misp_db_data:
+  # IRIS Volumes
+  iris_db_data:
+  iris_upload_data:
