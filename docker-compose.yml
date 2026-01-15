@@ -13,16 +13,16 @@ services:
       target: gateway
     container_name: mcp_gateway
     environment:
-      - NODE_ENV=${NODE_ENV}
-      - REDIS_URL=${REDIS_URL}
+      - NODE_ENV=${NODE_ENV:-production}
+      - REDIS_URL=${REDIS_URL:-redis://mcp_redis:6379}
       - WAZUH_MCP_URL=http://wazuh-mcp:3000
       - MISP_MCP_URL=http://misp-mcp:3000
       - SHUFFLE_MCP_URL=http://shuffle-mcp:3000
       - DFIR_IRIS_MCP_URL=http://dfir-iris-mcp:3000
-      - LOG_LEVEL=${LOG_LEVEL}
-      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_change_me}
     ports:
-      - "${GATEWAY_PORT}:8080"
+      - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
       redis_main:
         condition: service_healthy
@@ -64,9 +64,9 @@ services:
       target: wazuh
     container_name: mcp_wazuh_adapter
     environment:
-      - WAZUH_API_URL=https://wazuh.manager:${WAZUH_API_PORT}
-      - WAZUH_API_USER=${WAZUH_API_USERNAME}
-      - WAZUH_API_PASS=${WAZUH_API_PASSWORD}
+      - WAZUH_API_URL=https://wazuh.manager:${WAZUH_API_PORT:-55000}
+      - WAZUH_API_USER=${WAZUH_API_USERNAME:-wazuh-wui}
+      - WAZUH_API_PASS=${WAZUH_API_PASSWORD:-SecretPassword123!}
     networks:
       - mcp_network
     depends_on:
@@ -93,7 +93,7 @@ services:
       target: shuffle
     container_name: mcp_shuffle_adapter
     environment:
-      - SHUFFLE_URL=http://shuffle-backend:${SHUFFLE_BACKEND_PORT}
+      - SHUFFLE_URL=http://shuffle-backend:${SHUFFLE_BACKEND_PORT:-5001}
       - SHUFFLE_API_TOKEN=YOUR_GENERATED_TOKEN
     networks:
       - mcp_network
@@ -119,41 +119,41 @@ services:
   # ==========================================
 
   wazuh.manager:
-    image: wazuh/wazuh-manager:${WAZUH_VERSION}
+    image: wazuh/wazuh-manager:${WAZUH_VERSION:-4.7.2}
     hostname: wazuh.manager
     container_name: wazuh.manager
     restart: always
     ports:
-      - "${WAZUH_REGISTRATION_PORT}:1515"
-      - "${WAZUH_API_PORT}:55000"
-      - "${WAZUH_SYSLOG_PORT}:514/udp"
+      - "${WAZUH_REGISTRATION_PORT:-1515}:1515"
+      - "${WAZUH_API_PORT:-55000}:55000"
+      - "${WAZUH_SYSLOG_PORT:-514}:514/udp"
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
-      - INDEXER_USERNAME=${WAZUH_INDEXER_USERNAME}
-      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+      - INDEXER_USERNAME=${WAZUH_INDEXER_USERNAME:-admin}
+      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD:-SecretPassword123!}
     networks:
       - mcp_network
 
   wazuh.indexer:
-    image: wazuh/wazuh-indexer:${WAZUH_VERSION}
+    image: wazuh/wazuh-indexer:${WAZUH_VERSION:-4.7.2}
     hostname: wazuh.indexer
     container_name: wazuh.indexer
     restart: always
     ports:
-      - "${WAZUH_INDEXER_PORT}:9200"
+      - "${WAZUH_INDEXER_PORT:-9200}:9200"
     environment:
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${WAZUH_INDEXER_PASSWORD}
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${WAZUH_INDEXER_PASSWORD:-SecretPassword123!}
     networks:
       - mcp_network
 
   wazuh.dashboard:
-    image: wazuh/wazuh-dashboard:${WAZUH_VERSION}
+    image: wazuh/wazuh-dashboard:${WAZUH_VERSION:-4.7.2}
     hostname: wazuh.dashboard
     container_name: wazuh.dashboard
     restart: always
     ports:
-      - "${WAZUH_DASHBOARD_PORT}:5601"
+      - "${WAZUH_DASHBOARD_PORT:-8443}:5601"
     environment:
       - WAZUH_API_URL=https://wazuh.manager
       - OPENSEARCH_URL=https://wazuh.indexer:9200
@@ -168,25 +168,25 @@ services:
   # ==========================================
 
   shuffle-frontend:
-    image: ${SHUFFLE_FRONTEND_IMAGE}:${SHUFFLE_VERSION}
+    image: ${SHUFFLE_FRONTEND_IMAGE:-ghcr.io/shuffle/shuffle-frontend}:${SHUFFLE_VERSION:-latest}
     container_name: shuffle-frontend
     hostname: shuffle-frontend
     ports:
-      - "${SHUFFLE_FRONTEND_PORT}:443"
+      - "${SHUFFLE_FRONTEND_PORT:-3443}:443"
     networks:
       - mcp_network
     environment:
-      - BACKEND_HOSTNAME=${BACKEND_HOSTNAME}
+      - BACKEND_HOSTNAME=${BACKEND_HOSTNAME:-shuffle-backend}
     depends_on:
       - shuffle-backend
     restart: unless-stopped
 
   shuffle-backend:
-    image: ${SHUFFLE_BACKEND_IMAGE}:${SHUFFLE_VERSION}
+    image: ${SHUFFLE_BACKEND_IMAGE:-ghcr.io/shuffle/shuffle-backend}:${SHUFFLE_VERSION:-latest}
     container_name: shuffle-backend
-    hostname: ${BACKEND_HOSTNAME}
+    hostname: ${BACKEND_HOSTNAME:-shuffle-backend}
     ports:
-      - "${SHUFFLE_BACKEND_PORT}:5001"
+      - "${SHUFFLE_BACKEND_PORT:-5001}:5001"
     networks:
       - mcp_network
     environment:
@@ -205,9 +205,9 @@ services:
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms1024m -Xmx1024m"
       - discovery.type=single-node
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD}
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD:-SecretPassword123!}
     ports:
-      - "${SHUFFLE_OPENSEARCH_PORT}:9200"
+      - "${SHUFFLE_OPENSEARCH_PORT:-9201}:9200"
     networks:
       - mcp_network
     volumes:
@@ -215,7 +215,7 @@ services:
     restart: unless-stopped
 
   shuffle-orborus:
-    image: ${SHUFFLE_ORBORUS_IMAGE}:${SHUFFLE_VERSION}
+    image: ${SHUFFLE_ORBORUS_IMAGE:-ghcr.io/shuffle/shuffle-orborus}:${SHUFFLE_VERSION:-latest}
     container_name: shuffle-orborus
     hostname: shuffle-orborus
     networks:
@@ -223,8 +223,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - BASE_URL=http://${BACKEND_HOSTNAME}:5001
-      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:${SHUFFLE_VERSION}
+      - BASE_URL=http://${BACKEND_HOSTNAME:-shuffle-backend}:5001
+      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:${SHUFFLE_VERSION:-latest}
     restart: unless-stopped
 
   # ==========================================
@@ -232,14 +232,14 @@ services:
   # ==========================================
 
   misp-core:
-    image: ghcr.io/misp/misp-docker/misp-core:${MISP_CORE_TAG}
+    image: ghcr.io/misp/misp-docker/misp-core:${MISP_CORE_TAG:-latest}
     container_name: misp-core
     restart: always
     ports:
-      - "${MISP_HTTP_PORT}:80"
-      - "${MISP_HTTPS_PORT}:443"
+      - "${MISP_HTTP_PORT:-8000}:80"
+      - "${MISP_HTTPS_PORT:-9443}:443"
     environment:
-      - BASE_URL=${MISP_BASE_URL}
+      - BASE_URL=${MISP_BASE_URL:-https://localhost:9443}
       - REDIS_HOST=misp-redis
       - MYSQL_HOST=misp-db
     networks:
@@ -253,10 +253,10 @@ services:
     container_name: misp-db
     restart: always
     environment:
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER:-misp}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-misp_password}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-misp}
     networks:
       - mcp_network
     volumes:
@@ -266,7 +266,7 @@ services:
     image: valkey/valkey:7.2
     container_name: misp-redis
     restart: always
-    command: valkey-server --requirepass ${MISP_REDIS_PASSWORD}
+    command: valkey-server --requirepass ${MISP_REDIS_PASSWORD:-redispassword}
     networks:
       - mcp_network
 
@@ -278,9 +278,9 @@ services:
     image: postgres:15-alpine
     container_name: iris-db
     environment:
-      - POSTGRES_USER=${IRIS_POSTGRES_USER}
-      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
-      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+      - POSTGRES_USER=${IRIS_POSTGRES_USER:-iris}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD:-iris_password}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB:-iris_db}
     networks:
       - mcp_network
     volumes:
@@ -288,21 +288,21 @@ services:
     restart: unless-stopped
 
   iris-web:
-    image: dfiriris/iris-web:${IRIS_VERSION}
+    image: dfiriris/iris-web:${IRIS_VERSION:-v2.0.0}
     container_name: iris-web
     depends_on:
       - iris-db
       - iris-rabbitmq
     environment:
       - POSTGRES_SERVER=iris-db
-      - POSTGRES_USER=${IRIS_POSTGRES_USER}
-      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
-      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+      - POSTGRES_USER=${IRIS_POSTGRES_USER:-iris}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD:-iris_password}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB:-iris_db}
       - RABBITMQ_SERVER=iris-rabbitmq
-      - RABBITMQ_USER=${IRIS_RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD}
+      - RABBITMQ_USER=${IRIS_RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD:-guest}
     ports:
-      - "${IRIS_WEB_PORT}:8000"
+      - "${IRIS_WEB_PORT:-8081}:8000"
     networks:
       - mcp_network
     volumes:
@@ -310,18 +310,18 @@ services:
     restart: unless-stopped
 
   iris-worker:
-    image: dfiriris/iris-worker:${IRIS_VERSION}
+    image: dfiriris/iris-worker:${IRIS_VERSION:-v2.0.0}
     container_name: iris-worker
     depends_on:
       - iris-web
     environment:
       - POSTGRES_SERVER=iris-db
-      - POSTGRES_USER=${IRIS_POSTGRES_USER}
-      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD}
-      - POSTGRES_DB=${IRIS_POSTGRES_DB}
+      - POSTGRES_USER=${IRIS_POSTGRES_USER:-iris}
+      - POSTGRES_PASSWORD=${IRIS_POSTGRES_PASSWORD:-iris_password}
+      - POSTGRES_DB=${IRIS_POSTGRES_DB:-iris_db}
       - RABBITMQ_SERVER=iris-rabbitmq
-      - RABBITMQ_USER=${IRIS_RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD}
+      - RABBITMQ_USER=${IRIS_RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${IRIS_RABBITMQ_PASSWORD:-guest}
     networks:
       - mcp_network
     volumes:
@@ -332,13 +332,13 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: iris-rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=${IRIS_RABBITMQ_USER}
-      - RABBITMQ_DEFAULT_PASS=${IRIS_RABBITMQ_PASSWORD}
+      - RABBITMQ_DEFAULT_USER=${IRIS_RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${IRIS_RABBITMQ_PASSWORD:-guest}
     networks:
       - mcp_network
     ports:
-      - "${IRIS_RABBITMQ_PORT}:5672"
-      - "${IRIS_RABBITMQ_MGMT_PORT}:15672"
+      - "${IRIS_RABBITMQ_PORT:-5672}:5672"
+      - "${IRIS_RABBITMQ_MGMT_PORT:-15672}:15672"
     restart: unless-stopped
 
 networks:
