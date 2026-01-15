@@ -288,7 +288,7 @@ services:
     restart: unless-stopped
 
   iris-web:
-    image: dfiriris/iris-web:${IRIS_VERSION:-v2.4.24}
+    image: ghcr.io/dfir-iris/iriswebapp_app:${IRIS_VERSION:-v2.4.24}
     container_name: iris-web
     depends_on:
       - iris-db
@@ -310,8 +310,9 @@ services:
     restart: unless-stopped
 
   iris-worker:
-    image: dfiriris/iris-worker:${IRIS_VERSION:-v2.4.24}
+    image: ghcr.io/dfir-iris/iriswebapp_app:${IRIS_VERSION:-v2.4.24}
     container_name: iris-worker
+    command: celery -A app.iris_celery worker --loglevel=INFO
     depends_on:
       - iris-web
     environment:
