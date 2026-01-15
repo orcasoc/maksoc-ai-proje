@@ -119,7 +119,7 @@ services:
   # ==========================================
 
   wazuh.manager:
-    image: wazuh/wazuh-manager:${WAZUH_VERSION:-4.7.2}
+    image: wazuh/wazuh-manager:${WAZUH_VERSION:-4.14.2}
     hostname: wazuh.manager
     container_name: wazuh.manager
     restart: always
@@ -135,7 +135,7 @@ services:
       - mcp_network
 
   wazuh.indexer:
-    image: wazuh/wazuh-indexer:${WAZUH_VERSION:-4.7.2}
+    image: wazuh/wazuh-indexer:${WAZUH_VERSION:-4.14.2}
     hostname: wazuh.indexer
     container_name: wazuh.indexer
     restart: always
@@ -148,7 +148,7 @@ services:
       - mcp_network
 
   wazuh.dashboard:
-    image: wazuh/wazuh-dashboard:${WAZUH_VERSION:-4.7.2}
+    image: wazuh/wazuh-dashboard:${WAZUH_VERSION:-4.14.2}
     hostname: wazuh.dashboard
     container_name: wazuh.dashboard
     restart: always
@@ -232,7 +232,7 @@ services:
   # ==========================================
 
   misp-core:
-    image: ghcr.io/misp/misp-docker/misp-core:${MISP_CORE_TAG:-latest}
+    image: ghcr.io/misp/misp-docker/misp-core:${MISP_CORE_TAG:-v2.5.31}
     container_name: misp-core
     restart: always
     ports:
@@ -288,7 +288,7 @@ services:
     restart: unless-stopped
 
   iris-web:
-    image: dfiriris/iris-web:${IRIS_VERSION:-v2.0.0}
+    image: dfiriris/iris-web:${IRIS_VERSION:-v2.4.24}
     container_name: iris-web
     depends_on:
       - iris-db
@@ -310,7 +310,7 @@ services:
     restart: unless-stopped
 
   iris-worker:
-    image: dfiriris/iris-worker:${IRIS_VERSION:-v2.0.0}
+    image: dfiriris/iris-worker:${IRIS_VERSION:-v2.4.24}
     container_name: iris-worker
     depends_on:
       - iris-web
